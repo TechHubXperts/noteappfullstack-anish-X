@@ -40,7 +40,7 @@ export default function NoteEditor({ note, onDelete, onUpdate }) {
   if (!note) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
-        <p>Select a note to view odsdfsdfsdfsdfsdfsdsdfasdffsrsdfsd create a new one</p>
+        <p>Select a note to view odsdfsdfsdfsdfsdsfsdfsdsdfasdffsrsdfsd create a new one</p>
       </div>
     );
   }
