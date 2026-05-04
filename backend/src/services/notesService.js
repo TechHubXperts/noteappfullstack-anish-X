@@ -12,7 +12,7 @@ export const getAllNotes = async () => {
     // Return all notes sorted by createdAt (newest first)
     return notes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   } catch (error) {
-    throw new Error(`Failed to fetch notes: ${error.message}`);
+    throw new Error(`Unable to fetch notes: ${error.message}`);
   }
 };
 
