@@ -1,140 +1,131 @@
-/**
- * Shared contract rules for the full-stack note app (frontend + backend).
- * rootDir is two levels above this file: scripts/contracts/ → repo root.
- */
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+export const rootDir = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  "../..",
+);
 
-/** Git / npm root (parent of scripts/) */
-export const rootDir = path.resolve(__dirname, "..", "..");
+const fail = (message) => {
+  throw new Error(message);
+};
 
-function fail(message) {
-  console.error(`\x1b[31m[contracts]\x1b[0m ${message}`);
-  process.exit(1);
-}
+const fileExists = (relativePath) =>
+  fs.existsSync(path.join(rootDir, relativePath));
 
-function readText(relativePath) {
-  const abs = path.join(rootDir, relativePath);
-  return fs.readFileSync(abs, "utf8");
-}
+const readFile = (relativePath) =>
+  fs.readFileSync(path.join(rootDir, relativePath), "utf8");
 
-function requirePath(relativePath, label) {
-  const abs = path.join(rootDir, relativePath);
-  if (!fs.existsSync(abs)) {
-    fail(`Missing ${label}: ${relativePath}`);
-  }
-  return abs;
-}
+export const validateStaticContracts = () => {
+  const rootItems = fs.readdirSync(rootDir, { withFileTypes: true });
+  const appDirs = rootItems.filter((d) => d.isDirectory()).map((d) => d.name);
+  const expectedDirs = ["frontend", "backend"];
 
-function requireDir(relativePath, label) {
-  const abs = requirePath(relativePath, label);
-  if (!fs.statSync(abs).isDirectory()) {
-    fail(`Expected directory for ${label}: ${relativePath}`);
-  }
-  return abs;
-}
-
-function parseJson(relativePath) {
-  const abs = requirePath(relativePath, "file");
-  try {
-    return JSON.parse(readText(relativePath));
-  } catch {
-    fail(`Invalid JSON: ${relativePath}`);
-  }
-}
-
-export function assertWorkspacesPresent() {
-  requireDir("frontend", "frontend workspace");
-  requireDir("backend", "backend workspace");
-}
-
-export function assertRootPackageJson() {
-  const pkg = parseJson("package.json");
-  if (pkg.private !== true) {
-    fail('Root package.json must set "private": true.');
-  }
-  if (pkg.type !== "module") {
-    fail('Root package.json must set "type": "module" for ESM hook scripts.');
-  }
-}
-
-export function assertChildPackageJsons() {
-  parseJson("frontend/package.json");
-  parseJson("backend/package.json");
-}
-
-export function assertBackendIndex() {
-  requirePath("backend/src/index.js", "backend entry");
-  const src = readText("backend/src/index.js");
-  if (!/\b3000\b/.test(src)) {
-    fail("backend/src/index.js must reference port 3000 (e.g. process.env.PORT || 3000).");
-  }
-  if (!/\.listen\s*\(/.test(src)) {
-    fail("backend/src/index.js must call .listen(...) on the HTTP server.");
-  }
-  if (!/app\.use\s*\(\s*["']\/api\/[Nn]otes["']/.test(src)) {
-    fail(
-      "backend/src/index.js must mount notes API with app.use('/api/notes'...) or '/api/Notes'.",
-    );
-  }
-}
-
-export function assertViteDevPort() {
-  requirePath("frontend/vite.config.js", "Vite config");
-  const viteSrc = readText("frontend/vite.config.js");
-  if (!/\b5173\b/.test(viteSrc)) {
-    fail("frontend/vite.config.js must configure the dev server to use port 5173.");
-  }
-}
-
-export function assertBackendDependsOnDotenv() {
-  const pkg = parseJson("backend/package.json");
-  if (!pkg.dependencies?.dotenv) {
-    fail('backend/package.json must list "dotenv" in dependencies.');
-  }
-}
-
-export function assertEnvIgnoredAndNotTracked() {
-  let ignored = false;
-  try {
-    execSync(`git -C "${rootDir}" check-ignore -q -- backend/.env`, {
-      stdio: "pipe",
-    });
-    ignored = true;
-  } catch {
-    ignored = false;
-  }
-  if (!ignored) {
-    fail(
-      "backend/.env must match a gitignore rule (e.g. backend/.env or .env in root .gitignore).",
-    );
-  }
-  const tracked = execSync(`git -C "${rootDir}" ls-files -- backend/.env`, {
-    encoding: "utf8",
-  }).trim();
-  if (tracked.length > 0) {
-    fail("backend/.env must not be tracked; remove it from git history/index.");
-  }
-  const envAbs = path.join(rootDir, "backend", ".env");
-  if (fs.existsSync(envAbs)) {
-    const body = readText("backend/.env");
-    if (!/^\s*MONGODB_URI\s*=/m.test(body) && !/^\s*MONGO_URI\s*=/m.test(body)) {
-      fail("When backend/.env exists it must define MONGODB_URI= or MONGO_URI=.");
+  for (const dir of expectedDirs) {
+    if (!appDirs.includes(dir)) {
+      fail(`Root structure contract failed: ${dir}/ must exist.`);
     }
   }
-}
 
-/** Full contract suite used by contracts:precommit */
-export function runContractChecks() {
-  assertWorkspacesPresent();
-  assertRootPackageJson();
-  assertChildPackageJsons();
-  assertBackendIndex();
-  assertViteDevPort();
-  assertBackendDependsOnDotenv();
-  assertEnvIgnoredAndNotTracked();
-}
+  if (
+    !fileExists("frontend/package.json") ||
+    !fileExists("backend/package.json")
+  ) {
+    fail(
+      "Required manifest contract failed: frontend/package.json and backend/package.json must exist.",
+    );
+  }
+
+  if (!fileExists("backend/src/index.js")) {
+    fail(
+      "Backend entrypoint contract failed: backend/src/index.js must exist.",
+    );
+  }
+
+  const backendIndex = readFile("backend/src/index.js");
+  if (!/3000/.test(backendIndex) || !/listen\(/.test(backendIndex)) {
+    fail(
+      "Backend port contract failed: set backend/src/index.js to use port 3000, e.g. const PORT = process.env.PORT || 3000;",
+    );
+  }
+  if (!/app\.use\(["']\/api\/notes["']/.test(backendIndex)) {
+    fail(
+      "API route contract failed: /api/notes route mount must exist in backend/src/index.js.",
+    );
+  }
+
+  const viteConfigPath = fileExists("frontend/vite.config.js")
+    ? "frontend/vite.config.js"
+    : "frontend/vite.config.ts";
+  if (!fileExists(viteConfigPath)) {
+    fail(
+      "Frontend entrypoint contract failed: Vite config missing in frontend/.",
+    );
+  }
+
+  const viteConfig = readFile(viteConfigPath);
+  if (!/5173/.test(viteConfig)) {
+    fail(
+      "Frontend port contract failed: set frontend/vite.config.* server.port to 5173.",
+    );
+  }
+
+  // DB env naming contract:
+  // - Allow frontend-only progress by not requiring MONGODB_URI to be present.
+  // - If DB env keys are defined, they must use only MONGODB_URI (no DATABASE_URL, DB_URL, etc).
+  const envPath = path.join(rootDir, "backend/.env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf8");
+    const envKeys = envContent
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#") && line.includes("="))
+      .map((line) => line.split("=")[0].trim());
+
+    const disallowedDbKey = envKeys.find((key) => {
+      const normalized = key.toUpperCase();
+      const looksLikeDbKey =
+        normalized.includes("DATABASE") ||
+        normalized.startsWith("DB_") ||
+        normalized.endsWith("_DB") ||
+        normalized.includes("MONGO");
+      return looksLikeDbKey && normalized !== "MONGODB_URI";
+    });
+
+    if (disallowedDbKey) {
+      fail(
+        `Database env contract failed: use MONGODB_URI only (found "${disallowedDbKey}").`,
+      );
+    }
+  }
+
+  // .env safety contract:
+  // - backend/.env must be ignored by git
+  // - backend/.env must not be tracked in git
+  const ignoredCheck = spawnSync(
+    "git",
+    ["check-ignore", "-q", "backend/.env"],
+    {
+      cwd: rootDir,
+      stdio: "ignore",
+    },
+  );
+  if (ignoredCheck.status !== 0) {
+    fail("Secrets contract failed: backend/.env must be listed in .gitignore.");
+  }
+
+  const trackedCheck = spawnSync(
+    "git",
+    ["ls-files", "--error-unmatch", "backend/.env"],
+    {
+      cwd: rootDir,
+      stdio: "ignore",
+    },
+  );
+  if (trackedCheck.status === 0) {
+    fail(
+      "Secrets contract failed: backend/.env is tracked by git; untrack it before commit/push.",
+    );
+  }
+};

@@ -1,9 +1,9 @@
-#!/usr/bin/env node
-/**
- * Contract checks invoked from npm run contracts:precommit.
- * Cwd must be the repository root.
- */
-import { runContractChecks } from "./common.js";
+import { validateStaticContracts } from "./common.js";
 
-runContractChecks();
-console.log("[contracts] OK");
+try {
+  validateStaticContracts();
+  console.log("Pre-commit contracts passed.");
+} catch (error) {
+  console.error(`\nContract check failed: ${error.message}`);
+  process.exit(1);
+}

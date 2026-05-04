@@ -23,12 +23,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use("/api/Notes", notesRoutes);
-
 app.get("/", (req, res) => {
   res.status(200).json({ message: "Hello World" });
 });
-
+app.use("/api/notes", notesRoutes);
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok", message: "Server is running" });
 });
