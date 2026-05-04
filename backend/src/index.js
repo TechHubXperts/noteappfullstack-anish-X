@@ -42,5 +42,5 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
-  console.log(`API endpoints available at http://localhost:${PORT}/api/Notes`);
+  console.log(`API endpoints available at http://localhost:${PORT}/api/notes`);
 });
