@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+trap 'rm -f "$HUSKY_PUSH_TMP"' EXIT
+HUSKY_PUSH_TMP="$(mktemp)" || exit 1
+if npm run contracts:precommit >"$HUSKY_PUSH_TMP" 2>&1; then
+  rm -f "$HUSKY_PUSH_TMP"
+  HUSKY_PUSH_TMP=
+else
+  cat "$HUSKY_PUSH_TMP"
+  exit 1
+fi
+printf '%s\n' \
+  '============================================================' \
+  '                       SUBMISSION' \
+  '============================================================' \
+  'Code successfully submitted…'
